@@ -1,0 +1,45 @@
+[gd_scene load_steps=4 format=3 uid="uid://b5xvv8xw2rf8r"]
+
+[ext_resource type="Script" path="res://examples/scripts/player_controller.luau" id="1_k4n2b"]
+[ext_resource type="Script" path="res://examples/scripts/simple_enemy.luau" id="2_m9x4l"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1hjkl"]
+size = Vector2(32, 32)
+
+[node name="TestScene" type="Node2D"]
+
+[node name="Player" type="CharacterBody2D" parent="."]
+position = Vector2(100, 300)
+script = ExtResource("1_k4n2b")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+shape = SubResource("RectangleShape2D_1hjkl")
+
+[node name="Sprite2D" type="Sprite2D" parent="Player"]
+modulate = Color(0, 0.8, 0, 1)
+scale = Vector2(32, 32)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Player"]
+visible = false
+
+[node name="Enemy" type="RigidBody2D" parent="."]
+position = Vector2(400, 300)
+script = ExtResource("2_m9x4l")
+
+[node name="CollisionShape2D2" type="CollisionShape2D" parent="Enemy"]
+shape = SubResource("RectangleShape2D_1hjkl")
+
+[node name="Sprite2D2" type="Sprite2D" parent="Enemy"]
+modulate = Color(0.8, 0, 0, 1)
+scale = Vector2(32, 32)
+
+[node name="Ground" type="StaticBody2D" parent="."]
+position = Vector2(0, 400)
+
+[node name="CollisionShape2D3" type="CollisionShape2D" parent="Ground"]
+shape = SubResource("RectangleShape2D_1hjkl")
+scale = Vector2(50, 1)
+
+[node name="Sprite2D3" type="Sprite2D" parent="Ground"]
+modulate = Color(0.5, 0.3, 0.2, 1)
+scale = Vector2(1600, 32)

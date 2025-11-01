@@ -1,0 +1,23 @@
+[configuration]
+
+entry_symbol = "luau_library_init"
+compatibility_minimum = "4.5"
+
+[libraries]
+
+windows.debug.x86_32 = "res://Addons/Luau-by-v3nn7/bin/libluau-windows.template_debug.x86_32.dll"
+windows.debug.x86_64 = "res://Addons/Luau-by-v3nn7/bin/libluau-windows.template_debug.x86_64.dll"
+windows.release.x86_32 = "res://Addons/Luau-by-v3nn7/bin/libluau-windows.template_release.x86_32.dll"
+windows.release.x86_64 = "res://Addons/Luau-by-v3nn7/bin/libluau-windows.template_release.x86_64.dll"
+
+linux.debug.x86_32 = "res://Addons/Luau-by-v3nn7/bin/libluau-linux.template_debug.x86_32.so"
+linux.debug.x86_64 = "res://Addons/Luau-by-v3nn7/bin/libluau-linux.template_debug.x86_64.so"
+linux.release.x86_32 = "res://Addons/Luau-by-v3nn7/bin/libluau-linux.template_release.x86_32.so"
+linux.release.x86_64 = "res://Addons/Luau-by-v3nn7/bin/libluau-linux.template_release.x86_64.so"
+
+macos.debug = "res://Addons/Luau-by-v3nn7/bin/libluau-osx.template_debug.dylib"
+macos.release = "res://Addons/Luau-by-v3nn7/bin/libluau-osx.template_release.dylib"
+
+[icons]
+
+LuauScript = "res://Addons/Luau-by-v3nn7/icons/LuauScript.svg"

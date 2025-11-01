@@ -1,0 +1,41 @@
+# SCons build artifacts
+.sconsign.dblite
+**/.sconsign.dblite
+build/
+
+# Godot / GDExtension binaries
+bin/
+Addons/**/bin/
+*.dll
+*.so
+*.dylib
+*.exp
+*.lib
+*.pdb
+*.exe
+
+# Logs
+*.log
+godot_cpp_build.log
+build_log.txt
+
+# IDE files
+.vscode/
+.vs/
+*.suo
+*.user
+*.cache
+
+# Godot import cache
+.import/
+
+# godot-cpp generated/compiled outputs
+extern/godot-cpp/bin/
+extern/godot-cpp/gen/
+extern/godot-cpp/build/
+extern/godot-cpp/.sconsign.dblite
+
+# Temporary files
+*.tmp
+*.temp
+~*
