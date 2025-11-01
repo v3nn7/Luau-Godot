@@ -164,21 +164,208 @@ bool LuauScriptLanguage::_has_named_classes() const { return false; }
 
 Dictionary LuauScriptLanguage::_complete_code(const String &p_code, const String &p_path, Object *p_owner) const {
     Dictionary result;
-    // Godot requires 'result' to exist even if empty.
-    result["result"] = Array();
-    // 'force' (not 'forced') jest wymagany przez ScriptLanguageExtension.
     result["force"] = false;
+    
+    Array suggestions;
+    
+    // Basic Luau keywords
+    PackedStringArray keywords = PackedStringArray();
+    keywords.push_back("and");
+    keywords.push_back("break");
+    keywords.push_back("do");
+    keywords.push_back("else");
+    keywords.push_back("elseif");
+    keywords.push_back("end");
+    keywords.push_back("false");
+    keywords.push_back("for");
+    keywords.push_back("function");
+    keywords.push_back("if");
+    keywords.push_back("in");
+    keywords.push_back("local");
+    keywords.push_back("nil");
+    keywords.push_back("not");
+    keywords.push_back("or");
+    keywords.push_back("repeat");
+    keywords.push_back("return");
+    keywords.push_back("then");
+    keywords.push_back("true");
+    keywords.push_back("until");
+    keywords.push_back("while");
+    
+    // Add keywords to suggestions
+    for (int i = 0; i < keywords.size(); i++) {
+        Dictionary suggestion;
+        suggestion["display"] = keywords[i];
+        suggestion["insert"] = keywords[i];
+        suggestion["kind"] = 14; // Keyword
+        suggestion["location"] = 0;
+        suggestions.push_back(suggestion);
+    }
+    
+    // Basic Godot/Luau built-ins
+    PackedStringArray builtins = PackedStringArray();
+    builtins.push_back("print");
+    builtins.push_back("type");
+    builtins.push_back("tostring");
+    builtins.push_back("tonumber");
+    builtins.push_back("pairs");
+    builtins.push_back("ipairs");
+    builtins.push_back("next");
+    builtins.push_back("getmetatable");
+    builtins.push_back("setmetatable");
+    
+    // Add built-ins to suggestions
+    for (int i = 0; i < builtins.size(); i++) {
+        Dictionary suggestion;
+        suggestion["display"] = builtins[i];
+        suggestion["insert"] = builtins[i];
+        suggestion["kind"] = 3; // Function
+        suggestion["location"] = 0;
+        suggestions.push_back(suggestion);
+    }
+    
+    // If we have an owner object, suggest its methods and properties
+    if (p_owner) {
+        // Get class methods
+        PackedStringArray methods = ClassDB::class_get_method_list(p_owner->get_class_name(), true);
+        for (int i = 0; i < methods.size(); i++) {
+            Dictionary suggestion;
+            suggestion["display"] = methods[i];
+            suggestion["insert"] = methods[i];
+            suggestion["kind"] = 2; // Method
+            suggestion["location"] = 0;
+            suggestions.push_back(suggestion);
+        }
+        
+        // Get class properties
+        PackedStringArray properties = ClassDB::class_get_property_list(p_owner->get_class_name(), true);
+        for (int i = 0; i < properties.size(); i++) {
+            Dictionary suggestion;
+            suggestion["display"] = properties[i];
+            suggestion["insert"] = properties[i];
+            suggestion["kind"] = 5; // Field/Property
+            suggestion["location"] = 0;
+            suggestions.push_back(suggestion);
+        }
+    }
+    
+    result["result"] = suggestions;
     return result;
 }
 
 Dictionary LuauScriptLanguage::_lookup_code(const String &p_code, const String &p_symbol, const String &p_path, Object *p_owner) const {
     Dictionary result;
-    // Godot expects a 'result' key indicating the lookup outcome.
-    // 0 = LOOKUP_RESULT_SCRIPT_LOCATION
-    result["result"] = 0;
-    // Additional optional fields.
+    
+    // Initialize with default "not found" values
     result["type"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
     result["location"] = -1;
+    
+    if (p_symbol.is_empty()) {
+        return result;
+    }
+    
+    // Check if it's a Luau keyword
+    PackedStringArray keywords = PackedStringArray();
+    keywords.push_back("and");
+    keywords.push_back("break");
+    keywords.push_back("do");
+    keywords.push_back("else");
+    keywords.push_back("elseif");
+    keywords.push_back("end");
+    keywords.push_back("false");
+    keywords.push_back("for");
+    keywords.push_back("function");
+    keywords.push_back("if");
+    keywords.push_back("in");
+    keywords.push_back("local");
+    keywords.push_back("nil");
+    keywords.push_back("not");
+    keywords.push_back("or");
+    keywords.push_back("repeat");
+    keywords.push_back("return");
+    keywords.push_back("then");
+    keywords.push_back("true");
+    keywords.push_back("until");
+    keywords.push_back("while");
+    
+    for (int i = 0; i < keywords.size(); i++) {
+        if (keywords[i] == p_symbol) {
+            result["type"] = 1; // LOOKUP_RESULT_CLASS_CONSTANT or similar
+            result["class_name"] = "Luau";
+            result["class_member"] = p_symbol;
+            return result;
+        }
+    }
+    
+    // Check if it's a built-in function
+    PackedStringArray builtins = PackedStringArray();
+    builtins.push_back("print");
+    builtins.push_back("type");
+    builtins.push_back("tostring");
+    builtins.push_back("tonumber");
+    builtins.push_back("pairs");
+    builtins.push_back("ipairs");
+    builtins.push_back("next");
+    builtins.push_back("getmetatable");
+    builtins.push_back("setmetatable");
+    
+    for (int i = 0; i < builtins.size(); i++) {
+        if (builtins[i] == p_symbol) {
+            result["type"] = 2; // LOOKUP_RESULT_CLASS_METHOD
+            result["class_name"] = "Luau";
+            result["class_member"] = p_symbol;
+            return result;
+        }
+    }
+    
+    // If we have an owner object, check its class
+    if (p_owner) {
+        StringName class_name = p_owner->get_class_name();
+        
+        // Check if it's a method of the owner's class
+        if (ClassDB::class_has_method(class_name, StringName(p_symbol))) {
+            result["type"] = 2; // LOOKUP_RESULT_CLASS_METHOD
+            result["class_name"] = String(class_name);
+            result["class_member"] = p_symbol;
+            return result;
+        }
+        
+        // Check if it's a property of the owner's class
+        PackedStringArray properties = ClassDB::class_get_property_list(class_name, true);
+        for (int i = 0; i < properties.size(); i++) {
+            if (properties[i] == p_symbol) {
+                result["type"] = 3; // LOOKUP_RESULT_CLASS_PROPERTY
+                result["class_name"] = String(class_name);
+                result["class_member"] = p_symbol;
+                return result;
+            }
+        }
+    }
+    
+    // Try to find symbol in the current script
+    if (!p_code.is_empty()) {
+        PackedStringArray lines = p_code.split("\n");
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines[i].strip_edges();
+            
+            // Look for function definitions
+            if (line.begins_with("function " + p_symbol + "(") || 
+                line.begins_with("local function " + p_symbol + "(")) {
+                result["type"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
+                result["location"] = i + 1; // Line numbers are 1-based
+                return result;
+            }
+            
+            // Look for variable declarations
+            if (line.begins_with("local " + p_symbol + " ") || 
+                line.begins_with(p_symbol + " = ")) {
+                result["type"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
+                result["location"] = i + 1; // Line numbers are 1-based
+                return result;
+            }
+        }
+    }
+    
     return result;
 }
 

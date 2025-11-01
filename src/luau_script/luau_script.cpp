@@ -432,6 +432,7 @@ LuauScriptInstance::~LuauScriptInstance() {
 
 bool LuauScriptInstance::init(Ref<LuauScript> p_script, Object* p_object) {
     if (p_script.is_null() || !p_object) {
+        UtilityFunctions::print("[LUAU DEBUG] init: null script or object");
         return false;
     }
 
@@ -440,37 +441,45 @@ bool LuauScriptInstance::init(Ref<LuauScript> p_script, Object* p_object) {
 
     // Only proceed if script compiled; allow built-in scripts with empty path
     if (!script->_is_valid()) {
+        UtilityFunctions::print("[LUAU DEBUG] init: script not valid");
         return false;
     }
 
     LuauScriptLanguage* lang = LuauScriptLanguage::get_singleton();
     if (!lang) {
+        UtilityFunctions::print("[LUAU DEBUG] init: no language singleton");
         return false;
     }
 
     L = lang->get_lua_state();
     if (!L) {
+        UtilityFunctions::print("[LUAU DEBUG] init: no lua state");
         return false;
     }
 
-    // Execute script code to create the instance environment
-    if (!lang->execute_luau_code(script->get_source_code(), script->get_path())) {
-        UtilityFunctions::print("Failed to execute Luau script: " + script->get_path());
-        return false;
-    }
-
-    // Create a table to represent this instance
+    // Create a table to represent this instance first
     lua_newtable(L);
     
-    // Store reference to self
+    // Store reference to self before executing code
     self_ref = luau_ref(L, LUA_REGISTRYINDEX);
-
-    // Setup owner reference
+    
+    // Setup owner reference in the instance table
     lua_rawgeti(L, LUA_REGISTRYINDEX, self_ref);
     GodotApiBindings::push_object(L, owner);
     lua_setfield(L, -2, "owner");
     lua_pop(L, 1);
 
+    // Execute script code in a protected environment
+    // Don't fail initialization if script execution fails - allow empty scripts
+    String source_code = script->get_source_code();
+    if (!source_code.is_empty()) {
+        if (!lang->execute_luau_code(source_code, script->get_path())) {
+            UtilityFunctions::print("[LUAU DEBUG] init: script execution failed, but continuing with empty instance");
+            // Don't return false here - allow scripts with syntax errors to create instances
+        }
+    }
+
+    UtilityFunctions::print("[LUAU DEBUG] init: success");
     return true;
 }
 
@@ -511,26 +520,58 @@ bool LuauScriptInstance::has_method(const StringName& p_method) {
 
 Variant LuauScriptInstance::call_method(const StringName& p_method, const Variant** p_args, int p_argcount) {
     if (!L || self_ref == LUA_NOREF || !script.is_valid()) {
+        UtilityFunctions::print("[LUAU DEBUG] call_method: invalid state");
         return Variant();
     }
 
     const char* method_cstr = String(p_method).utf8().get_data();
+    
+    // First check if the method exists in the global scope
     lua_getglobal(L, method_cstr);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return Variant();
+    bool is_global_function = lua_isfunction(L, -1);
+    
+    if (!is_global_function) {
+        lua_pop(L, 1); // Remove the nil/non-function value
+        
+        // Try to find the method in the instance table
+        lua_rawgeti(L, LUA_REGISTRYINDEX, self_ref);
+        if (lua_istable(L, -1)) {
+            lua_getfield(L, -1, method_cstr);
+            if (lua_isfunction(L, -1)) {
+                // Found method in instance table
+                lua_remove(L, -2); // Remove instance table, keep function
+            } else {
+                // Method not found anywhere
+                lua_pop(L, 2); // Remove both values
+                UtilityFunctions::print("[LUAU DEBUG] call_method: method '" + String(p_method) + "' not found");
+                return Variant();
+            }
+        } else {
+            lua_pop(L, 1); // Remove invalid instance table
+            UtilityFunctions::print("[LUAU DEBUG] call_method: invalid instance table");
+            return Variant();
+        }
     }
 
-    // Push self as first argument
-    lua_rawgeti(L, LUA_REGISTRYINDEX, self_ref);
+    // At this point we have a function on the stack
+    // Push self as first argument if it's not a global function
+    if (!is_global_function) {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, self_ref);
+    }
     
     // Push other arguments
     for (int i = 0; i < p_argcount; i++) {
-        GodotApiBindings::variant_to_lua(L, *p_args[i]);
+        if (p_args[i]) {
+            GodotApiBindings::variant_to_lua(L, *p_args[i]);
+        } else {
+            lua_pushnil(L);
+        }
     }
 
-    // Call function
-    int result = lua_pcall(L, p_argcount + 1, 1, 0);
+    // Call function with appropriate argument count
+    int total_args = is_global_function ? p_argcount : p_argcount + 1;
+    int result = lua_pcall(L, total_args, 1, 0);
+    
     if (result != LUA_OK) {
         const char* err = lua_tostring(L, -1);
         UtilityFunctions::print(String("Luau error in ") + p_method + ": " + (err ? err : "unknown"));
@@ -538,7 +579,11 @@ Variant LuauScriptInstance::call_method(const StringName& p_method, const Varian
         return Variant();
     }
 
-    Variant ret_value = GodotApiBindings::lua_to_variant(L, -1);
+    // Convert return value
+    Variant ret_value = Variant();
+    if (!lua_isnil(L, -1)) {
+        ret_value = GodotApiBindings::lua_to_variant(L, -1);
+    }
     lua_pop(L, 1);
     
     return ret_value;
