@@ -244,10 +244,19 @@ Variant GodotApiBindings::lua_to_variant(lua_State* L, int index) {
             }
         case LUA_TUSERDATA:
             {
-                // Check if it's a wrapped Godot object
-                Object** obj_ptr = (Object**)lua_touserdata(L, index);
-                if (obj_ptr && *obj_ptr) {
-                    return Variant(*obj_ptr);
+                // Check if it's a wrapped Godot object by verifying metatable
+                if (lua_getmetatable(L, index)) {
+                    // Check if this userdata has a Godot object metatable
+                    // We can verify this by checking if it has the expected size
+                    size_t size = lua_objlen(L, index);
+                    if (size == sizeof(Object*)) {
+                        Object** obj_ptr = (Object**)lua_touserdata(L, index);
+                        if (obj_ptr && *obj_ptr) {
+                            lua_pop(L, 1); // Remove metatable
+                            return Variant(*obj_ptr);
+                        }
+                    }
+                    lua_pop(L, 1); // Remove metatable
                 }
             }
             break;
@@ -282,8 +291,18 @@ Object* GodotApiBindings::check_object(lua_State* L, int index) {
         return nullptr;
     }
     
-    Object** obj_ptr = (Object**)lua_touserdata(L, index);
-    return (obj_ptr && *obj_ptr) ? *obj_ptr : nullptr;
+    // Verify it's a Godot object by checking metatable and size
+    if (lua_getmetatable(L, index)) {
+        size_t size = lua_objlen(L, index);
+        if (size == sizeof(Object*)) {
+            Object** obj_ptr = (Object**)lua_touserdata(L, index);
+            lua_pop(L, 1); // Remove metatable
+            return (obj_ptr && *obj_ptr) ? *obj_ptr : nullptr;
+        }
+        lua_pop(L, 1); // Remove metatable
+    }
+    
+    return nullptr;
 }
 
 void GodotApiBindings::setup_vector_types(lua_State* L) {

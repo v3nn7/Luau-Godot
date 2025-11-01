@@ -68,6 +68,12 @@ StringName LuauScript::_get_instance_base_type() const {
 
 void *LuauScript::_instance_create(Object *p_for_object) const {
     UtilityFunctions::print("[LUAU DEBUG] _instance_create called, valid: ", valid, ", path: '", path, "'");
+    
+    if (!p_for_object) {
+        UtilityFunctions::print("[LUAU DEBUG] _instance_create: p_for_object is null");
+        return nullptr;
+    }
+    
     if (!valid) {
         UtilityFunctions::print("[LUAU DEBUG] _instance_create: script not valid, returning nullptr");
         return nullptr;
@@ -75,6 +81,12 @@ void *LuauScript::_instance_create(Object *p_for_object) const {
 
     UtilityFunctions::print("[LUAU DEBUG] _instance_create: creating LuauScriptInstance");
     LuauScriptInstance* instance = memnew(LuauScriptInstance);
+    
+    if (!instance) {
+        UtilityFunctions::print("[LUAU DEBUG] _instance_create: failed to allocate LuauScriptInstance");
+        return nullptr;
+    }
+    
     UtilityFunctions::print("[LUAU DEBUG] _instance_create: calling init on instance");
     if (!instance->init(Ref<LuauScript>(this), p_for_object)) {
         UtilityFunctions::print("[LUAU DEBUG] _instance_create: init failed, deleting instance");
@@ -425,17 +437,33 @@ LuauScriptInstance::LuauScriptInstance() {
 }
 
 LuauScriptInstance::~LuauScriptInstance() {
+    UtilityFunctions::print("[LUAU DEBUG] ~LuauScriptInstance: destructor called");
+    
     if (L && self_ref != LUA_NOREF) {
+        UtilityFunctions::print("[LUAU DEBUG] ~LuauScriptInstance: unreferencing lua table, self_ref=", self_ref);
         luau_unref(L, self_ref);
+        self_ref = LUA_NOREF;
+    } else {
+        UtilityFunctions::print("[LUAU DEBUG] ~LuauScriptInstance: no lua reference to clean up, L=", (uint64_t)L, ", self_ref=", self_ref);
     }
+    
+    UtilityFunctions::print("[LUAU DEBUG] ~LuauScriptInstance: destructor completed");
 }
 
 bool LuauScriptInstance::init(Ref<LuauScript> p_script, Object* p_object) {
-    if (p_script.is_null() || !p_object) {
-        UtilityFunctions::print("[LUAU DEBUG] init: null script or object");
+    UtilityFunctions::print("[LUAU DEBUG] init: starting initialization");
+    
+    if (p_script.is_null()) {
+        UtilityFunctions::print("[LUAU DEBUG] init: script is null");
+        return false;
+    }
+    
+    if (!p_object) {
+        UtilityFunctions::print("[LUAU DEBUG] init: object is null");
         return false;
     }
 
+    UtilityFunctions::print("[LUAU DEBUG] init: script and object are valid");
     script = p_script;
     owner = p_object;
 
@@ -445,41 +473,67 @@ bool LuauScriptInstance::init(Ref<LuauScript> p_script, Object* p_object) {
         return false;
     }
 
+    UtilityFunctions::print("[LUAU DEBUG] init: getting language singleton");
     LuauScriptLanguage* lang = LuauScriptLanguage::get_singleton();
     if (!lang) {
         UtilityFunctions::print("[LUAU DEBUG] init: no language singleton");
         return false;
     }
 
+    UtilityFunctions::print("[LUAU DEBUG] init: getting lua state");
     L = lang->get_lua_state();
     if (!L) {
         UtilityFunctions::print("[LUAU DEBUG] init: no lua state");
         return false;
     }
 
+    UtilityFunctions::print("[LUAU DEBUG] init: creating lua table for instance");
     // Create a table to represent this instance first
     lua_newtable(L);
     
+    UtilityFunctions::print("[LUAU DEBUG] init: storing reference to instance table");
     // Store reference to self before executing code
     self_ref = luau_ref(L, LUA_REGISTRYINDEX);
     
+    // Check if reference creation succeeded
+    if (self_ref == LUA_NOREF || self_ref == LUA_REFNIL) {
+        UtilityFunctions::print("[LUAU DEBUG] init: failed to create lua reference, self_ref=", self_ref);
+        return false;
+    }
+    
+    UtilityFunctions::print("[LUAU DEBUG] init: lua reference created successfully, self_ref=", self_ref);
+    
     // Setup owner reference in the instance table
+    UtilityFunctions::print("[LUAU DEBUG] init: setting up owner reference in instance table");
     lua_rawgeti(L, LUA_REGISTRYINDEX, self_ref);
+    
+    // Check if we got the table back
+    if (!lua_istable(L, -1)) {
+        UtilityFunctions::print("[LUAU DEBUG] init: failed to retrieve instance table from registry");
+        lua_pop(L, 1);
+        return false;
+    }
+    
+    UtilityFunctions::print("[LUAU DEBUG] init: pushing owner object to lua");
     GodotApiBindings::push_object(L, owner);
     lua_setfield(L, -2, "owner");
     lua_pop(L, 1);
 
+    UtilityFunctions::print("[LUAU DEBUG] init: executing script code");
     // Execute script code in a protected environment
     // Don't fail initialization if script execution fails - allow empty scripts
     String source_code = script->get_source_code();
     if (!source_code.is_empty()) {
+        UtilityFunctions::print("[LUAU DEBUG] init: source code not empty, executing");
         if (!lang->execute_luau_code(source_code, script->get_path())) {
             UtilityFunctions::print("[LUAU DEBUG] init: script execution failed, but continuing with empty instance");
             // Don't return false here - allow scripts with syntax errors to create instances
         }
+    } else {
+        UtilityFunctions::print("[LUAU DEBUG] init: source code is empty, skipping execution");
     }
 
-    UtilityFunctions::print("[LUAU DEBUG] init: success");
+    UtilityFunctions::print("[LUAU DEBUG] init: initialization completed successfully");
     return true;
 }
 

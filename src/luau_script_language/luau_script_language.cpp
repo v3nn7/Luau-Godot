@@ -227,7 +227,7 @@ Dictionary LuauScriptLanguage::_complete_code(const String &p_code, const String
     // If we have an owner object, suggest its methods and properties
     if (p_owner) {
         // Get class methods
-        PackedStringArray methods = ClassDB::class_get_method_list(p_owner->get_class_name(), true);
+        PackedStringArray methods = ClassDB::class_get_method_list(StringName(p_owner->get_class()), true);
         for (int i = 0; i < methods.size(); i++) {
             Dictionary suggestion;
             suggestion["display"] = methods[i];
@@ -238,7 +238,7 @@ Dictionary LuauScriptLanguage::_complete_code(const String &p_code, const String
         }
         
         // Get class properties
-        PackedStringArray properties = ClassDB::class_get_property_list(p_owner->get_class_name(), true);
+        PackedStringArray properties = ClassDB::class_get_property_list(StringName(p_owner->get_class()), true);
         for (int i = 0; i < properties.size(); i++) {
             Dictionary suggestion;
             suggestion["display"] = properties[i];
@@ -320,22 +320,22 @@ Dictionary LuauScriptLanguage::_lookup_code(const String &p_code, const String &
     
     // If we have an owner object, check its class
     if (p_owner) {
-        StringName class_name = p_owner->get_class_name();
+        String class_name = p_owner->get_class();
         
         // Check if it's a method of the owner's class
-        if (ClassDB::class_has_method(class_name, StringName(p_symbol))) {
+        if (ClassDB::class_has_method(StringName(class_name), StringName(p_symbol))) {
             result["type"] = 2; // LOOKUP_RESULT_CLASS_METHOD
-            result["class_name"] = String(class_name);
+            result["class_name"] = class_name;
             result["class_member"] = p_symbol;
             return result;
         }
         
         // Check if it's a property of the owner's class
-        PackedStringArray properties = ClassDB::class_get_property_list(class_name, true);
+        PackedStringArray properties = ClassDB::class_get_property_list(StringName(class_name), true);
         for (int i = 0; i < properties.size(); i++) {
             if (properties[i] == p_symbol) {
                 result["type"] = 3; // LOOKUP_RESULT_CLASS_PROPERTY
-                result["class_name"] = String(class_name);
+                result["class_name"] = class_name;
                 result["class_member"] = p_symbol;
                 return result;
             }
@@ -357,8 +357,8 @@ Dictionary LuauScriptLanguage::_lookup_code(const String &p_code, const String &
             }
             
             // Look for variable declarations
-            if (line.begins_with("local " + p_symbol + " ") || 
-                line.begins_with(p_symbol + " = ")) {
+            if (line.begins_with("local " + p_symbol + String(" ")) || 
+                line.begins_with(p_symbol + String(" = "))) {
                 result["type"] = 0; // LOOKUP_RESULT_SCRIPT_LOCATION
                 result["location"] = i + 1; // Line numbers are 1-based
                 return result;
